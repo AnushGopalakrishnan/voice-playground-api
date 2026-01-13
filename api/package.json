@@ -1,4 +1,11 @@
 {
+  "dependencies": {
+    "@vercel/node": "^3.0.0"
+  }
+}
+
+
+{
   "name": "stt-voice-api",
   "private": true
 }
