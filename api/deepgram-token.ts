@@ -6,20 +6,33 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  if (!process.env.DEEPGRAM_API_KEY) {
-    return res.status(500).end()
+  // ✅ CORS
+  res.setHeader("Access-Control-Allow-Origin", "*")
+  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS")
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type")
+
+  if (req.method === "OPTIONS") {
+    res.status(200).end()
+    return
   }
 
-  const resp = await fetch("https://api.deepgram.com/v1/projects", {
+  if (!process.env.DEEPGRAM_API_KEY) {
+    res.status(500).json({ error: "Missing Deepgram key" })
+    return
+  }
+
+  // Get project ID
+  const projectsRes = await fetch("https://api.deepgram.com/v1/projects", {
     headers: {
       Authorization: `Token ${process.env.DEEPGRAM_API_KEY}`,
     },
   })
 
-  const data = await resp.json()
-  const projectId = data.projects[0].project_id
+  const projectsData = await projectsRes.json()
+  const projectId = projectsData.projects[0].project_id
 
-  const tokenResp = await fetch(
+  // Create short-lived key
+  const tokenRes = await fetch(
     `https://api.deepgram.com/v1/projects/${projectId}/keys`,
     {
       method: "POST",
@@ -35,7 +48,7 @@ export default async function handler(
     }
   )
 
-  const tokenData = await tokenResp.json()
+  const tokenData = await tokenRes.json()
 
   res.status(200).json({ key: tokenData.key })
 }
