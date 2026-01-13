@@ -1,10 +1,13 @@
+export const config = {
+  runtime: "nodejs",
+}
+
 import type { VercelRequest, VercelResponse } from "@vercel/node"
 
 export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
-  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*")
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS")
   res.setHeader("Access-Control-Allow-Headers", "Content-Type")
@@ -15,16 +18,16 @@ export default async function handler(
   }
 
   if (req.method !== "POST") {
-    res.status(405).send("Method not allowed")
+    res.status(405).end()
     return
   }
 
   try {
     if (!process.env.DEEPGRAM_API_KEY) {
-      throw new Error("DEEPGRAM_API_KEY missing")
+      return res.status(500).json({ text: "" })
     }
 
-    // Collect raw audio bytes
+    // collect raw bytes
     const chunks: Buffer[] = []
     for await (const chunk of req) {
       chunks.push(chunk)
@@ -32,8 +35,9 @@ export default async function handler(
 
     const audioBuffer = Buffer.concat(chunks)
 
+    // ⬇️ IMPORTANT: explicitly tell Deepgram it's WEBM
     const deepgramRes = await fetch(
-      "https://api.deepgram.com/v1/listen?model=nova-2&punctuate=true",
+      "https://api.deepgram.com/v1/listen?model=nova-2&punctuate=true&interim_results=false",
       {
         method: "POST",
         headers: {
@@ -45,19 +49,18 @@ export default async function handler(
     )
 
     if (!deepgramRes.ok) {
-      const err = await deepgramRes.text()
-      throw new Error(err)
+      // swallow transient Deepgram errors
+      return res.status(200).json({ text: "" })
     }
 
     const data = await deepgramRes.json()
-    const transcript =
-      data?.results?.channels?.[0]?.alternatives?.[0]?.transcript || ""
 
-    res.status(200).json({ text: transcript })
-  } catch (err: any) {
-    console.error("STT ERROR:", err)
-    res.status(500).json({
-      error: err.message || "STT failed",
-    })
+    const text =
+      data?.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? ""
+
+    return res.status(200).json({ text })
+  } catch {
+    // NEVER propagate 500s to the client during live STT
+    return res.status(200).json({ text: "" })
   }
 }
