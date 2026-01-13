@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node"
-import OpenAI from "openai"
 
 export default async function handler(
   req: VercelRequest,
@@ -21,8 +20,8 @@ export default async function handler(
   }
 
   try {
-    if (!process.env.OPENAI_API_KEY) {
-      throw new Error("OPENAI_API_KEY is missing")
+    if (!process.env.ELEVENLABS_API_KEY) {
+      throw new Error("ELEVENLABS_API_KEY is missing")
     }
 
     const { text } = req.body || {}
@@ -32,26 +31,40 @@ export default async function handler(
       return
     }
 
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    })
+    // ✅ Default ElevenLabs voice (Rachel)
+    const VOICE_ID = "21m00Tcm4TlvDq8ikWAM"
 
-    const speech = await openai.audio.speech.create({
-      model: "gpt-4o-mini-tts",
-      voice: "alloy",
-      input: text,
-    })
+    const elevenRes = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${VOICE_ID}`,
+      {
+        method: "POST",
+        headers: {
+          "xi-api-key": process.env.ELEVENLABS_API_KEY,
+          "Content-Type": "application/json",
+          "Accept": "audio/mpeg",
+        },
+        body: JSON.stringify({
+          text,
+          model_id: "eleven_monolingual_v1",
+        }),
+      }
+    )
 
-    const buffer = Buffer.from(await speech.arrayBuffer())
+    if (!elevenRes.ok) {
+      const errText = await elevenRes.text()
+      throw new Error(errText)
+    }
+
+    const audioBuffer = Buffer.from(await elevenRes.arrayBuffer())
 
     res.setHeader("Content-Type", "audio/mpeg")
-    res.status(200).send(buffer)
+    res.status(200).send(audioBuffer)
   } catch (err: any) {
-    console.error("VOICE FUNCTION ERROR:", err)
+    console.error("ELEVENLABS ERROR:", err)
     res.status(500).send(
       typeof err?.message === "string"
         ? err.message
-        : "Unknown server error"
+        : "Voice generation failed"
     )
   }
 }
