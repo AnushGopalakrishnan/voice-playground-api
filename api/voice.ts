@@ -9,6 +9,17 @@ export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
+  // ✅ Allow CORS
+  res.setHeader("Access-Control-Allow-Origin", "*")
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS")
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type")
+
+  // ✅ Handle preflight
+  if (req.method === "OPTIONS") {
+    res.status(200).end()
+    return
+  }
+
   if (req.method !== "POST") {
     res.status(405).send("Method not allowed")
     return
@@ -16,8 +27,8 @@ export default async function handler(
 
   const { text, voice = "alloy" } = req.body || {}
 
-  if (!text || text.length > 4000) {
-    res.status(400).json({ error: "Invalid text" })
+  if (!text) {
+    res.status(400).json({ error: "No text provided" })
     return
   }
 
@@ -31,7 +42,6 @@ export default async function handler(
     const buffer = Buffer.from(await speech.arrayBuffer())
 
     res.setHeader("Content-Type", "audio/mpeg")
-    res.setHeader("Cache-Control", "no-store")
     res.status(200).send(buffer)
   } catch (err) {
     console.error(err)
