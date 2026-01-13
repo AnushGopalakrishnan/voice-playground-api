@@ -1,6 +1,11 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node"
+import OpenAI from "openai"
 
-export default function handler(
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY!,
+})
+
+export default async function handler(
   req: VercelRequest,
   res: VercelResponse
 ) {
@@ -9,15 +14,27 @@ export default function handler(
     return
   }
 
-  const { text } = req.body || {}
+  const { text, voice = "alloy" } = req.body || {}
 
-  if (!text) {
-    res.status(400).json({ error: "No text provided" })
+  if (!text || text.length > 4000) {
+    res.status(400).json({ error: "Invalid text" })
     return
   }
 
-  res.status(200).json({
-    message: "API working",
-    receivedText: text
-  })
+  try {
+    const speech = await openai.audio.speech.create({
+      model: "gpt-4o-mini-tts",
+      voice,
+      input: text,
+    })
+
+    const buffer = Buffer.from(await speech.arrayBuffer())
+
+    res.setHeader("Content-Type", "audio/mpeg")
+    res.setHeader("Cache-Control", "no-store")
+    res.status(200).send(buffer)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: "Voice generation failed" })
+  }
 }
